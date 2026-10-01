@@ -583,8 +583,9 @@ class Checker:
 logger = init_logger()
 
 
-def main():
+def main() -> int:
     """主函数"""
+    exit_code = 1
     try:
         # 1. 加载配置
         logger.info(f"{LogEmoji.START} 步骤 1: 加载配置")
@@ -603,6 +604,10 @@ def main():
             logger.info(f"{LogEmoji.START} 步骤 3: 格式化结果")
             title, content, log_content = checker.format_results()
             logger.info(f"\n{LogEmoji.END}========== 签到总结 ==========\n{title}\n{log_content}")
+            exit_code = int(not checker.results or any(
+                result.code not in (CheckinStatus.SUCCESS, CheckinStatus.REPEAT)
+                for result in checker.results
+            ))
 
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
@@ -610,10 +615,11 @@ def main():
 
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
-    push_service = PushService(config if "config" in locals() else "")
-    push_service.send(title, content)
+    if "config" in locals():
+        PushService(config).send(title, content)
     logger.info(f"{LogEmoji.END} 签到完成")
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
