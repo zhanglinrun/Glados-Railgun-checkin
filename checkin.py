@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import logging
+import time
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, asdict
@@ -305,15 +306,21 @@ class API:
         return self._parse_checkin(raw)
 
     def _checkin_attempt(self, url: str, data: Dict, cookies: str, user_agent: str) -> Optional[Dict]:
-        """发起一次签到请求并返回解析后的响应体（失败返回 None）"""
-        response = self._make_request(url, "POST", data, cookies, user_agent=user_agent)
-        if not response:
-            return None
-        try:
-            raw = response.json()
-        except ValueError:
-            self._log("error", LogEmoji.ERROR, "签到响应解析失败", force=True)
-            return None
+        """发送签到请求，权限拒绝时有限重试（网络或解析失败返回 None）"""
+        for attempt in range(3):
+            response = self._make_request(url, "POST", data, cookies, user_agent=user_agent)
+            if not response:
+                return None
+            try:
+                raw = response.json()
+            except ValueError:
+                self._log("error", LogEmoji.ERROR, "签到响应解析失败", force=True)
+                return None
+            if raw.get("code") != -2 or attempt == 2:
+                break
+            delay = 30 * (attempt + 1)
+            self._log("warning", LogEmoji.WARNING, f"登录校验被拒绝，{delay} 秒后重试（{attempt + 2}/3）", force=True)
+            time.sleep(delay)
 
         # 缓存学得的设备 UA，供本次运行后续请求复用
         if raw.get("code") == 4 and raw.get("reason") == "device-mismatch":
